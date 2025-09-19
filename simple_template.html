@@ -1,0 +1,657 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Porter - OVA to Cloud</title>
+    <style>
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif; 
+            padding: 20px; 
+            max-width: 1000px; 
+            margin: 0 auto; 
+            background-color: #f5f7fa;
+            color: #333;
+            line-height: 1.5;
+        }
+        .notice { 
+            padding: 15px; 
+            background: #e3effd; 
+            margin-bottom: 20px; 
+            border-radius: 6px;
+            border-left: 4px solid #3498db;
+        }
+        section { 
+            margin-bottom: 30px; 
+            padding: 25px; 
+            border: 1px solid #e1e4e8; 
+            border-radius: 8px;
+            background-color: #fff;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+        }
+        .status {
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 6px;
+            position: relative;
+            padding-left: 18px;
+            border-left-width: 4px;
+        }
+        .status-info {
+            background-color: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+            border-left: 4px solid #17a2b8;
+        }
+        .status-success {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+            border-left: 4px solid #28a745;
+        }
+        .status-warning {
+            background-color: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeeba;
+            border-left: 4px solid #ffc107;
+        }
+        .status-error {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+            border-left: 4px solid #dc3545;
+        }
+        button {
+            padding: 10px 20px;
+            background-color: #3498db;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            margin-top: 12px;
+        }
+        button:hover {
+            background-color: #2980b9;
+        }
+        
+        /* Progress overlay styles */
+        .progress-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            color: white;
+        }
+        .progress-spinner {
+            border: 16px solid #f3f3f3;
+            border-top: 16px solid #3498db;
+            border-radius: 50%;
+            width: 80px;
+            height: 80px;
+            animation: spin 2s linear infinite;
+            margin-bottom: 20px;
+        }
+        .progress-bar-container {
+            width: 80%;
+            max-width: 500px;
+            background-color: #f1f1f1;
+            border-radius: 5px;
+            margin: 15px 0;
+            position: relative;
+            height: 30px;
+        }
+        .progress-bar {
+            height: 100%;
+            background-color: #4CAF50;
+            border-radius: 5px;
+            width: 0%;
+            transition: width 0.5s;
+        }
+        .progress-text {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: black;
+            font-weight: bold;
+        }
+        .progress-message {
+            font-size: 18px;
+            text-align: center;
+            max-width: 80%;
+            background-color: rgba(0, 0, 0, 0.7);
+            padding: 15px;
+            border-radius: 5px;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Porter - OVA to Cloud</h1>
+        <p>Easily convert and upload VM disk images to cloud storage</p>
+    </header>
+    
+    <div class="notice">
+        <pre>{{.DockerNotice}}</pre>
+    </div>
+    
+    <section>
+        <h2>1. Extract OVA</h2>
+        <form id="extractForm" action="/extract" method="post" enctype="multipart/form-data">
+            <p>Upload an OVA file to extract its VMDK disk images.</p>
+            <div>
+                <input type="file" name="ova" id="ovaFile" accept=".ova">
+            </div>
+            <button type="submit" id="extractBtn">Extract</button>
+        </form>
+    </section>
+
+    <section>
+        <h2>2. Convert VMDK(s) to Cloud Format</h2>
+        <form id="convertForm" action="/convert" method="post">
+            {{if .VMDKs}}
+                <p>Select VMDKs to convert:</p>
+                <div>
+                {{range .VMDKs}}
+                    <div>
+                        <input type="checkbox" name="vmdks" value="{{.}}" checked>
+                        <label>{{.}}</label>
+                    </div>
+                {{end}}
+                </div>
+                
+                <div class="form-group" style="margin-top: 15px;">
+                    <label for="format-select"><strong>Convert to format:</strong></label>
+                    <select name="format" id="format-select" style="margin-bottom: 8px; padding: 8px; border-radius: 4px; border: 1px solid #ddd;">
+                        <option value="raw">RAW (for Linux/KVM)</option>
+                        <option value="vpc">VHD (for Azure/Hyper-V)</option>
+                        <option value="vhdx">VHDX (for newer Hyper-V)</option>
+                        <option value="qcow2">QCOW2 (for QEMU/OpenStack)</option>
+                    </select>
+                    <div class="help-text" style="font-size: 0.9em; color: #666; margin-bottom: 15px;">
+                        <p><strong>Format guide:</strong></p>
+                        <ul>
+                            <li><strong>RAW</strong>: Most widely compatible format, but largest file size. Best for Linux/KVM and AWS imports.</li>
+                            <li><strong>VHD</strong>: Required for Azure and older Hyper-V environments.</li>
+                            <li><strong>VHDX</strong>: Enhanced VHD format for newer Hyper-V with larger disk size support and better performance.</li>
+                            <li><strong>QCOW2</strong>: Efficient format with compression and snapshot support. Best for QEMU/OpenStack.</li>
+                        </ul>
+                    </div>
+                </div>
+                
+                <button type="submit">Convert</button>
+            {{else}}
+                <div class="status status-info">
+                    <p>No VMDK files available. Please extract an OVA file first.</p>
+                </div>
+            {{end}}
+        </form>
+    </section>
+
+    <section>
+        <h2>3. Upload</h2>
+        <form id="uploadForm" action="/upload" method="post">
+            <div>
+                <label>Destination:</label>
+                <select name="cloud">
+                    <option value="local">Local filesystem</option>
+                    <option value="azure">Azure Blob Storage</option>
+                    <option value="aws">AWS S3</option>
+                </select>
+                <div class="help-text" style="font-size: 0.9em; color: #666; margin-top: 8px;">
+                    <p><strong>Cloud format recommendations:</strong></p>
+                    <ul>
+                        <li><strong>Azure</strong>: Use VHD format for virtual machines</li>
+                        <li><strong>AWS</strong>: Use RAW format for AMI import</li>
+                    </ul>
+                </div>
+            </div>
+            
+            {{if .ConvertedFiles}}
+                <p>Select files to upload:</p>
+                {{range .ConvertedFiles}}
+                    <div>
+                        <input type="checkbox" name="files" value="{{.}}" checked>
+                        <label>{{.}}</label>
+                    </div>
+                {{end}}
+                
+                <div id="local-fields">
+                    <label>Local Directory:</label>
+                    <input type="text" name="target" id="local-target" value="./uploads">
+                </div>
+                
+                <div id="azure-fields" style="display:none">
+                    <div>
+                        <label for="azure-account">Azure Account:</label>
+                        <select name="account" id="azure-account">
+                            <option value="">Select subscription</option>
+                            {{range .AzureAccounts}}
+                                <option value="{{.}}">{{.}}</option>
+                            {{end}}
+                        </select>
+                    </div>
+                    <div>
+                        <label for="azure-container">Container:</label>
+                        <select name="container" id="azure-container">
+                            <option value="">Select container</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div id="aws-fields" style="display:none">
+                    <div>
+                        <label>S3 Bucket:</label>
+                        <select name="bucket" id="aws-bucket">
+                            <option value="">Click to load buckets</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <button type="submit">Upload</button>
+            {{else}}
+                <div class="status status-info">
+                    <p>No converted files available. Convert VMDKs first.</p>
+                </div>
+            {{end}}
+        </form>
+    </section>
+    
+    <div id="status-messages"></div>
+    
+    <script>
+        // Show progress indicator with message and optional percentage
+        function showProgress(message, percent) {
+            let overlay = document.getElementById('progress-overlay');
+            if (!overlay) {
+                overlay = document.createElement('div');
+                overlay.id = 'progress-overlay';
+                overlay.className = 'progress-overlay';
+                
+                const spinner = document.createElement('div');
+                spinner.className = 'progress-spinner';
+                
+                const messageEl = document.createElement('div');
+                messageEl.id = 'progress-message';
+                messageEl.className = 'progress-message';
+                
+                const progressBarContainer = document.createElement('div');
+                progressBarContainer.className = 'progress-bar-container';
+                
+                const progressBar = document.createElement('div');
+                progressBar.id = 'progress-bar';
+                progressBar.className = 'progress-bar';
+                
+                const progressText = document.createElement('div');
+                progressText.id = 'progress-text';
+                progressText.className = 'progress-text';
+                
+                progressBarContainer.appendChild(progressBar);
+                progressBarContainer.appendChild(progressText);
+                
+                overlay.appendChild(spinner);
+                overlay.appendChild(messageEl);
+                overlay.appendChild(progressBarContainer);
+                document.body.appendChild(overlay);
+            }
+            
+            document.getElementById('progress-message').textContent = message;
+            
+            // Update progress bar if percentage is provided
+            if (percent !== undefined && percent !== null) {
+                const progressBar = document.getElementById('progress-bar');
+                const progressText = document.getElementById('progress-text');
+                if (progressBar && progressText) {
+                    progressBar.style.width = percent + '%';
+                    progressText.textContent = percent + '%';
+                    
+                    // Make the spinner less visible when showing progress bar
+                    const spinner = document.querySelector('.progress-spinner');
+                    if (spinner) spinner.style.opacity = '0.3';
+                }
+            } else {
+                // Reset progress bar if no percentage is provided
+                const progressBar = document.getElementById('progress-bar');
+                const progressText = document.getElementById('progress-text');
+                if (progressBar && progressText) {
+                    progressBar.style.width = '0%';
+                    progressText.textContent = '';
+                    
+                    // Show spinner fully when no progress percentage
+                    const spinner = document.querySelector('.progress-spinner');
+                    if (spinner) spinner.style.opacity = '1';
+                }
+            }
+            
+            overlay.style.display = 'flex';
+            document.body.style.overflow = 'hidden'; // Prevent scrolling
+        }
+
+        // Hide progress indicator
+        function hideProgress() {
+            const overlay = document.getElementById('progress-overlay');
+            if (overlay) {
+                overlay.style.display = 'none';
+                document.body.style.overflow = '';
+            }
+        }
+        
+        // Show a status message
+        function showStatusMessage(message, type = 'info') {
+            const statusDiv = document.getElementById('status-messages');
+            if (!statusDiv) return;
+            
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'status status-' + type;
+            messageDiv.textContent = message;
+            
+            // Add dismiss button
+            const dismissBtn = document.createElement('button');
+            dismissBtn.textContent = '✕';
+            dismissBtn.style = 'float: right; background: transparent; color: inherit; border: none; cursor: pointer;';
+            dismissBtn.onclick = function() { messageDiv.remove(); };
+            messageDiv.appendChild(dismissBtn);
+            
+            statusDiv.appendChild(messageDiv);
+            
+            // Auto-dismiss success and info messages after 10 seconds
+            if (type === 'success' || type === 'info') {
+                setTimeout(() => {
+                    if (messageDiv.parentNode) {
+                        messageDiv.remove();
+                    }
+                }, 10000);
+            }
+        }
+
+        // Function to poll for upload progress
+        function startUploadProgressPolling() {
+            let pollCount = 0;
+            const maxPolls = 1000; // Safety limit
+            const pollInterval = 1000; // Poll every second
+            
+            const progressInterval = setInterval(() => {
+                pollCount++;
+                if (pollCount > maxPolls) {
+                    clearInterval(progressInterval);
+                    return;
+                }
+                
+                // Fetch actual progress from the server
+                fetch('/upload/progress')
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.total > 0) {
+                            const progress = data.percentage;
+                            
+                            // Update the progress display
+                            showProgress(data.status, progress);
+                            
+                            // If we're at 100%, clear the interval
+                            if (progress >= 100) {
+                                clearInterval(progressInterval);
+                            }
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error fetching progress:', error);
+                    });
+            }, pollInterval);
+            
+            // Store the interval ID so we can clear it later
+            window.currentProgressInterval = progressInterval;
+        }
+        
+        // Azure accounts dynamic dropdown
+        function fetchAzureAccounts() {
+            console.log("Fetching Azure accounts...");
+            showProgress('Loading Azure accounts...');
+            fetch('/azure/accounts')
+                .then(res => {
+                    if (!res.ok) {
+                        throw new Error("Error fetching Azure accounts: " + res.status + " " + res.statusText);
+                    }
+                    return res.json();
+                })
+                .then(data => {
+                    console.log("Received Azure accounts:", data);
+                    const accountSelect = document.querySelector('select[name="account"]');
+                    if (accountSelect && data.accounts) {
+                        accountSelect.innerHTML = '<option value="">Select an account</option>';
+                        data.accounts.forEach(acc => {
+                            const option = document.createElement('option');
+                            option.value = acc;
+                            option.textContent = acc;
+                            accountSelect.appendChild(option);
+                        });
+                        // Enable the select if we have accounts
+                        accountSelect.disabled = data.accounts.length === 0;
+                        
+                        if (data.accounts.length === 0) {
+                            showStatusMessage('No Azure accounts found. Please log in using "az login" first.', 'info');
+                        }
+                    }
+                })
+                .catch(error => {
+                    console.error("Azure accounts error:", error);
+                    showStatusMessage('Error loading Azure accounts: ' + error.message, 'warning');
+                })
+                .finally(() => hideProgress());
+        }
+
+        // Azure container dynamic dropdown
+        function fetchContainers() {
+            const account = document.querySelector('select[name="account"]').value;
+            if (!account) {
+                // Disable container select if no account selected
+                const containerSelect = document.querySelector('select[name="container"]');
+                if (containerSelect) {
+                    containerSelect.innerHTML = '<option value="">Select an account first</option>';
+                    containerSelect.disabled = true;
+                }
+                return;
+            }
+            
+            showProgress('Loading containers for ' + account + '...');
+            fetch('/azure/containers?account=' + encodeURIComponent(account))
+                .then(res => {
+                    if (!res.ok) {
+                        throw new Error('Failed to fetch containers: ' + res.status + ' ' + res.statusText);
+                    }
+                    return res.json();
+                })
+                .then(data => {
+                    const containerSelect = document.querySelector('select[name="container"]');
+                    if (containerSelect && data.containers) {
+                        containerSelect.innerHTML = '<option value="">Select a container</option>';
+                        data.containers.forEach(c => {
+                            const option = document.createElement('option');
+                            option.value = c;
+                            option.textContent = c;
+                            containerSelect.appendChild(option);
+                        });
+                        containerSelect.disabled = false;
+                        
+                        if (data.containers.length === 0) {
+                            showStatusMessage('No containers found in selected subscription/storage accounts.', 'warning');
+                        }
+                    }
+                })
+                .catch(error => {
+                    console.error('Error fetching containers:', error);
+                    showStatusMessage('Error fetching containers: ' + error.message, 'error');
+                })
+                .finally(() => hideProgress());
+        }
+        
+        // AWS S3 bucket dynamic dropdown
+        function fetchBuckets() {
+            showProgress('Loading AWS S3 buckets...');
+            fetch('/aws/buckets')
+                .then(res => {
+                    if (!res.ok) {
+                        throw new Error('Failed to fetch buckets: ' + res.status + ' ' + res.statusText);
+                    }
+                    return res.json();
+                })
+                .then(data => {
+                    const bucketSelect = document.querySelector('select[name="bucket"]');
+                    if (bucketSelect && data.buckets) {
+                        bucketSelect.innerHTML = '<option value="">Select a bucket</option>';
+                        data.buckets.forEach(b => {
+                            const option = document.createElement('option');
+                            option.value = b;
+                            option.textContent = b;
+                            bucketSelect.appendChild(option);
+                        });
+                        bucketSelect.disabled = data.buckets.length === 0;
+                        
+                        if (data.buckets.length === 0) {
+                            showStatusMessage('No S3 buckets found in your AWS account.', 'warning');
+                        }
+                    }
+                })
+                .catch(error => {
+                    console.error('Error fetching buckets:', error);
+                    showStatusMessage('Error fetching S3 buckets: ' + error.message, 'error');
+                })
+                .finally(() => hideProgress());
+        }
+        
+        document.addEventListener('DOMContentLoaded', function() {
+            // Handle form submissions with progress indicators
+            const extractForm = document.getElementById('extractForm');
+            if (extractForm) {
+                extractForm.addEventListener('submit', function(e) {
+                    const fileInput = document.getElementById('ovaFile');
+                    if (!fileInput.files || fileInput.files.length === 0) {
+                        e.preventDefault();
+                        showStatusMessage('Please select an OVA file first', 'warning');
+                        return;
+                    }
+                    showProgress('Extracting OVA file... This may take several minutes for large files.');
+                });
+            }
+            
+            const convertForm = document.getElementById('convertForm');
+            if (convertForm) {
+                convertForm.addEventListener('submit', function(e) {
+                    const checkboxes = document.querySelectorAll('input[name="vmdks"]:checked');
+                    if (checkboxes.length === 0) {
+                        e.preventDefault();
+                        showStatusMessage('Please select at least one VMDK file to convert', 'warning');
+                        return;
+                    }
+                    showProgress('Converting VMDK files... This may take several minutes.');
+                });
+            }
+            
+            const uploadForm = document.getElementById('uploadForm');
+            if (uploadForm) {
+                uploadForm.addEventListener('submit', function(e) {
+                    e.preventDefault();
+                    
+                    // Don't prevent form submission if no files are available
+                    const fileCheckboxes = document.querySelectorAll('input[name="files"]:checked');
+                    if (fileCheckboxes.length === 0) {
+                        const anyFiles = document.querySelectorAll('input[name="files"]');
+                        if (anyFiles.length > 0) {
+                            showStatusMessage('Please select at least one file to upload', 'warning');
+                            return; // Only block if files are available but none are selected
+                        }
+                    }
+                    
+                    const cloudType = document.querySelector('select[name="cloud"]').value;
+                    
+                    // Validate required fields based on cloud type
+                    if (cloudType === 'aws') {
+                        const bucket = document.querySelector('select[name="bucket"]').value;
+                        if (!bucket) {
+                            showStatusMessage('Please select an S3 bucket', 'warning');
+                            return;
+                        }
+                        showProgress('Uploading to AWS S3... This may take several minutes.');
+                        
+                        // Set up progress polling for AWS uploads
+                        startUploadProgressPolling();
+                    } else if (cloudType === 'azure') {
+                        const account = document.querySelector('select[name="account"]').value;
+                        const container = document.querySelector('select[name="container"]').value;
+                        if (!account) {
+                            showStatusMessage('Please select an Azure subscription', 'warning');
+                            return;
+                        }
+                        if (!container) {
+                            showStatusMessage('Please select an Azure container', 'warning');
+                            return;
+                        }
+                        showProgress('Uploading to Azure Blob Storage... This may take several minutes.');
+                        
+                        // Set up progress polling for Azure uploads
+                        startUploadProgressPolling();
+                    } else {
+                        const target = document.querySelector('#local-target').value;
+                        if (!target) {
+                            showStatusMessage('Please specify a local folder path', 'warning');
+                            return;
+                        }
+                        showProgress('Copying to local filesystem...');
+                    }
+                    
+                    this.submit();
+                });
+            }
+            
+            // Handle cloud selection change
+            const cloudSelect = document.querySelector('select[name="cloud"]');
+            if (cloudSelect) {
+                function updateStorageFields() {
+                    if (cloudSelect.value === 'aws') {
+                        fetchBuckets();
+                        document.getElementById('aws-fields').style.display = '';
+                        document.getElementById('azure-fields').style.display = 'none';
+                        document.getElementById('local-fields').style.display = 'none';
+                    } else if (cloudSelect.value === 'azure') {
+                        document.getElementById('aws-fields').style.display = 'none';
+                        document.getElementById('azure-fields').style.display = '';
+                        document.getElementById('local-fields').style.display = 'none';
+                        
+                        // Refresh Azure accounts when selecting Azure
+                        fetchAzureAccounts();
+                    } else {
+                        document.getElementById('aws-fields').style.display = 'none';
+                        document.getElementById('azure-fields').style.display = 'none';
+                        document.getElementById('local-fields').style.display = '';
+                    }
+                }
+                
+                // Set local as default
+                cloudSelect.value = 'local';
+                
+                // Add event listener for changes
+                cloudSelect.addEventListener('change', updateStorageFields);
+                
+                // Only show local fields initially, don't fetch any cloud resources
+                document.getElementById('aws-fields').style.display = 'none';
+                document.getElementById('azure-fields').style.display = 'none';
+                document.getElementById('local-fields').style.display = '';
+            }
+            
+            // Handle Azure account selection
+            const azureAccountSelect = document.getElementById('azure-account');
+            if (azureAccountSelect) {
+                azureAccountSelect.addEventListener('change', fetchContainers);
+            }
+        });
+    </script>
+</body>
+</html>

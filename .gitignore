@@ -1,0 +1,16 @@
+# Binaries
+porter
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Mac specific files
+.DS_Store
+
+# Data directories
+data/
+
+# Temporary files
+*.tmp
+*~
