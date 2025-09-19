@@ -1,17 +1,25 @@
 # Porter - VM Disk Image Conversion & Upload Tool
 
-Porter is a simple web app that helps convert VM disk images (VMDK) to different formats and upload them to various cloud storage providers.
+Porter is a web application that simplifies the conversion of virtual machine disk images (VMDKs) to various formats and facilitates their upload to cloud storage providers.
+
+![Porter Screenshot](https://via.placeholder.com/800x450?text=Porter+Screenshot)
 
 ## Features
 
 - Extract OVA files to get VMDKs
-- Convert VMDKs to RAW or VHD formats
+- Convert VMDKs to multiple formats:
+  - RAW (for Linux/KVM and AWS imports)
+  - VHD (for Azure and older Hyper-V)
+  - VHDX (for newer Hyper-V with better features)
+  - QCOW2 (for QEMU and OpenStack)
 - Upload converted images to:
   - AWS S3
   - Azure Blob Storage
   - Local filesystem
+- Real-time progress tracking for uploads and extractions
+- Clean, responsive web interface
 
-## Usage with Docker
+## Quick Start
 
 ### Prerequisites
 
@@ -20,32 +28,32 @@ Porter is a simple web app that helps convert VM disk images (VMDK) to different
   - AWS credentials in `~/.aws` (for AWS S3 uploads)
   - Azure CLI logged in (`~/.azure`) (for Azure Blob Storage uploads)
 
-### Quick Start
+### Option 1: Using the Start Script
 
 ```bash
-# Use the provided script to start the application
-./run.sh
+# Clone the repository
+git clone https://github.com/MichaelCade/porter.git
+cd porter
 
-# Access the web interface at http://localhost:8080
-```
+# Create data directories (if not using the script)
+mkdir -p ~/porter-data/extracted ~/porter-data/converted
 
-### Running in Background
-
-```bash
-# Use the start script to run in the background and open browser
+# Start Porter
 ./start.sh
+
+# The web interface will automatically open at http://localhost:8080
 ```
 
-### Manual Docker Run
+### Option 2: Manual Docker Run
 
 ```bash
 # Build the Docker image
 docker build -t porter .
 
 # Run the application with cloud provider credentials
-docker run -it --rm \
-  -v ~/.aws:/root/.aws \
-  -v ~/.azure:/root/.azure \
+docker run -d --name porter \
+  -v ~/.aws:/root/.aws:ro \
+  -v ~/.azure:/root/.azure:ro \
   -v ~/porter-data/extracted:/app/extracted \
   -v ~/porter-data/converted:/app/converted \
   -p 8080:8080 \
@@ -54,9 +62,32 @@ docker run -it --rm \
 
 ## Using the Web Interface
 
-1. **Extract OVA**: Upload an OVA file to extract the VMDK files inside
-2. **Convert VMDKs**: Select the extracted VMDKs and choose your target format (RAW or VHD)
-3. **Upload**: Select the converted files and choose your destination (AWS S3, Azure Blob Storage, or local folder)
+### 1. Extract OVA
+
+- Click "Browse" in the Extract OVA section
+- Select an OVA file from your computer
+- Click "Extract" and wait for the process to complete
+- The extracted VMDK files will appear in the Convert section
+
+### 2. Convert VMDKs to Cloud Format
+
+- Select the VMDKs you want to convert (all are selected by default)
+- Choose the target format:
+  - **RAW**: Most widely compatible format, but largest file size. Best for Linux/KVM and AWS imports.
+  - **VHD**: Required for Azure and older Hyper-V environments.
+  - **VHDX**: Enhanced VHD format for newer Hyper-V with larger disk size support and better performance.
+  - **QCOW2**: Efficient format with compression and snapshot support. Best for QEMU/OpenStack.
+- Click "Convert" and wait for the process to complete
+
+### 3. Upload to Cloud
+
+- Select the files you want to upload
+- Choose your destination:
+  - **Local**: Save to a local directory
+  - **AWS S3**: Upload to an S3 bucket
+  - **Azure Blob Storage**: Upload to Azure Blob Storage
+- For cloud uploads, select the storage account and container/bucket
+- Click "Upload" to start the transfer
 
 ## Data Storage
 
@@ -65,8 +96,36 @@ docker run -it --rm \
 
 You can place VMDK files manually in the extraction directory if you want to skip the OVA extraction step.
 
+## Stopping Porter
+
+```bash
+# Use the provided script
+./stop.sh
+
+# Or manually
+docker stop porter
+```
+
 ## Troubleshooting
 
-- If you don't see your AWS buckets or Azure containers, ensure your credentials are properly configured
-- Check that the mounted volumes have appropriate permissions
-- If using Docker Desktop, ensure file sharing is enabled for the required directories
+- **Cloud credentials not found**: Ensure your AWS credentials are in `~/.aws` and Azure CLI is logged in (`~/.azure`)
+- **Disk space issues**: Use `docker system df` to check Docker's disk usage. Run `docker system prune` to clear unused resources.
+- **Permission problems**: Ensure the mounted volumes have appropriate permissions
+- **Docker Desktop**: Ensure file sharing is enabled for the required directories
+- **Conversion fails**: Check the Docker logs with `docker logs porter`
+
+## Technical Details
+
+Porter is built with:
+- Go (backend)
+- HTML/CSS/JavaScript (frontend)
+- Docker (containerization)
+- QEMU-utils (for disk conversion)
+
+## License
+
+MIT
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.

@@ -915,10 +915,11 @@ func checkBinary(bin string) bool {
 func dockerNotice() string {
 	notice := ""
 	if _, err := os.Stat("/.dockerenv"); err == nil {
-		notice = "⚠️ Running inside Docker.\n" +
+		notice = "🐳 Running inside Docker.\n" +
 			"- Make sure you mounted ~/.aws and ~/.azure for credentials.\n" +
-			"- It's recommended to mount host directories for /app/extracted and /app/converted " +
-			"to avoid filling Docker.raw with large files. Otherwise, large temporary files may consume a lot of disk space."
+			"- It's recommended to mount host directories for /app/extracted and /app/converted\n" +
+			"  to avoid filling Docker with large files. Large temporary files may consume\n" +
+			"  significant disk space."
 	} else {
 		notice = "✅ Running locally. Ensure qemu-img, aws CLI, and az CLI are installed."
 	}
