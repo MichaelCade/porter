@@ -2,7 +2,7 @@
 
 Porter is a web application that simplifies the conversion of virtual machine disk images (VMDKs) to various formats and facilitates their upload to cloud storage providers.
 
-![Porter Screenshot](https://via.placeholder.com/800x450?text=Porter+Screenshot)
+![Porter Screenshot](screenshot.png)
 
 ## Features
 
